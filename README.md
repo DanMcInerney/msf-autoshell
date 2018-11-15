@@ -24,4 +24,4 @@ msf > load msgrpc Pass=123
 ```python msf-autoshell.py -n /path/to/nessus/file.nessus```
 
 ### Credits
-Thanks to Coalfire for development time.
+Thanks to Coalfire for some development time.
