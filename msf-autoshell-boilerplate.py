@@ -14,16 +14,8 @@ def parse_args():
     Parse arguments
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--nessus", help="Nessus .nessus file")
+    parser.add_argument("-n", "--nessus", help="Nessus .nessus file", required=True)
     return parser.parse_args()
-
-def check_for_args():
-    '''
-    Check for necessary arguments
-    '''
-    if not args.nessus:
-        print('[-] Missing .nessus file')
-        sys.exit('[-] Example: python autopwn.py -n /path/here/example_nessus_scan.nessus')
 
 def main():
     print('[*] Entered main function')
