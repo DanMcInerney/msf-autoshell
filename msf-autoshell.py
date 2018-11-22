@@ -15,19 +15,10 @@ def parse_args():
     Parse arguments
     '''
     parser = argparse.ArgumentParser()
-    parser.add_argument("-n", "--nessus", help="Nessus .nessus file")
+    parser.add_argument("-n", "--nessus", help="Nessus .nessus file", required=True)
     parser.add_argument("-u", "--user", default='msf', help="Username for msfrpc")
     parser.add_argument("-p", "--password", default='123', help="Password for msfrpc")
     return parser.parse_args()
-
-
-def check_for_args():
-    '''
-    Check for necessary arguments
-    '''
-    if not args.nessus:
-        print('[-] Missing .nessus file')
-        sys.exit('[-] Example: python autopwn.py -n /path/here/example_nessus_scan.nessus')
 
 
 def parse_nessus():
