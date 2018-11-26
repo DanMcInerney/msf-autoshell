@@ -142,5 +142,4 @@ def main():
 
 if __name__ == '__main__':
     args = parse_args() # This makes the 'args' variable global
-    check_for_args()
     main()
